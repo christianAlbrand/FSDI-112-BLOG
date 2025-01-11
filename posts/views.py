@@ -45,9 +45,23 @@ class DraftPostListView(LoginRequiredMixin, ListView):
         )
         return context
 
-class PostDetailView(DetailView):
+class PostDetailView(UserPassesTestMixin, DetailView):
     template_name = "posts/detail.html"
     model = Post
+
+    def test_func(self):
+        post = self.get_object()
+        if post.status.name == "published":
+            return True
+        elif post.status.name == "draft":
+            if (self.request.user.is_authenticated
+                    and self.request.user == post.author):
+                return True
+        elif (post.status.name == "archived"
+                and self.request.user.is_authenticated):
+            return True
+        else:
+            return False
 
 class PostCreateView(LoginRequiredMixin, CreateView):
     template_name = "posts/new.html"
@@ -75,3 +89,18 @@ class PostDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def test_func(self):
         post = self.get_object()
         return post.author == self.request.user
+
+class ArchivedPostsView(LoginRequiredMixin, ListView):
+    template_name = "posts/archived.html"
+    model = Post
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        archived = Status.objects.get(name="archived")
+        context["title"] = "Archived"
+        context["post_list"]= (
+            Post.objects
+            .filter(status=archived)
+            .order_by("created_on").reverse()
+        )
+        return context
